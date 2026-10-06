@@ -61,7 +61,9 @@ struct LineChart: View {
                 if showAxis {
                     AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { _ in
                         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(Palette.grid)
-                        AxisValueLabel(format: FloatingPointFormatStyle<Double>.number.notation(.compactName)).font(.system(size: 9))
+                        AxisValueLabel(format: FloatingPointFormatStyle<Double>.number.notation(.compactName))
+                            .font(.system(size: 9))
+                            .foregroundStyle(.primary)
                     }
                 }
             }

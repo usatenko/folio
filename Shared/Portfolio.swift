@@ -91,7 +91,10 @@ enum AppGroup {
 
 enum Fmt {
     static func money(_ v: Double, _ currency: String, decimals: Int = 0) -> String {
-        v.formatted(.currency(code: currency).precision(.fractionLength(decimals)))
+        // the locale separates number and symbol with a space; the widget columns are tight, so join them
+        let s = v.formatted(.currency(code: currency).precision(.fractionLength(decimals)))
+        return s.replacing(#/[\s\u{00A0}\u{202F}]+(?=\p{Sc}+$|[A-Z]{3}$)/#, with: "")
+            .replacing(#/^(\p{Sc}+|[A-Z]{3})[\s\u{00A0}\u{202F}]+/#) { String($0.1) }
     }
 
     static func pct(_ v: Double?, signed: Bool = true) -> String {
@@ -102,6 +105,19 @@ enum Fmt {
 
     static func signedMoney(_ v: Double, _ currency: String) -> String {
         (v > 0 ? "+" : "") + money(v, currency)
+    }
+
+    static func symbol(_ currency: String) -> String {
+        ["USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥", "CAD": "C$", "AUD": "A$", "HKD": "HK$"][currency] ?? currency
+    }
+
+    /// Whole amount with the short symbol used in the table ("6 010$"), for foreign-currency cash.
+    static func amount(_ v: Double, _ currency: String) -> String {
+        v.formatted(.number.precision(.fractionLength(0))) + symbol(currency)
+    }
+
+    static func price(_ v: Double) -> String {
+        v.formatted(.number.precision(.fractionLength(2)))
     }
 
     static func arrow(_ v: Double?) -> String {

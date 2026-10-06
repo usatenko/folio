@@ -49,7 +49,7 @@ struct Header: View {
     private var change: some View {
         HStack(spacing: 4) {
             if let d = p.dayChange {
-                Text("\(Fmt.arrow(d)) \(Fmt.signedMoney(d, p.currency))").foregroundStyle(Palette.delta(d))
+                Text(Fmt.signedMoney(d, p.currency)).foregroundStyle(Palette.delta(d))
             }
             Text(Fmt.pct(p.dayChangePct)).foregroundStyle(Palette.delta(p.dayChangePct))
             Text("today").foregroundStyle(.secondary)
@@ -125,28 +125,71 @@ struct WeightBar: View {
     }
 }
 
+/// Column labels for the detailed rows, laid out with the same fixed widths as PositionRow.
+struct PositionHeader: View {
+    var showWeightBar = false
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text("Ticker").frame(width: 38, alignment: .leading)
+            if showWeightBar {
+                Text("Weight").frame(maxWidth: .infinity, alignment: .leading)
+                Text("").frame(width: 34)
+            }
+            // same three sub-columns as the data: cost right-aligned, arrow, price left-aligned
+            HStack(spacing: 2) {
+                Text("Cost").frame(width: 42, alignment: .trailing)
+                Text("→").frame(width: 9)
+                Text("Price").frame(width: 52, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: showWeightBar ? .trailing : .leading)
+            Text("Value").frame(width: 50, alignment: .trailing)
+            Text("P&L").frame(width: 50, alignment: .trailing)
+            Text("P&L %").frame(width: 38, alignment: .trailing)
+        }
+        .font(.system(size: 9, weight: .medium))
+        .foregroundStyle(.secondary)
+        .textCase(.uppercase)
+        .lineLimit(1)
+    }
+}
+
 struct PositionRow: View {
     let pos: Position
     let currency: String
     var maxWeight: Double = 1
-    var detailed = false  // large widget: one line with weight bar, value, P&L amount and %
+    var detailed = false  // large widget: one line with cost → price, value, P&L amount and %
     var dense = false  // smaller type when many positions must fit
+    var showWeightBar = false  // extra-large widget has room for the bar as well
 
     var body: some View {
         if detailed {
-            HStack(spacing: 6) {
-                Text(pos.ticker).font(.caption.weight(.semibold)).frame(width: 40, alignment: .leading)
-                WeightBar(weight: pos.weight ?? 0, max: maxWeight).frame(minWidth: 30)
-                Text(Fmt.pct(pos.weight, signed: false)).foregroundStyle(.tertiary).frame(width: 34, alignment: .trailing)
-                Text(Fmt.money(pos.baseValue, currency)).fontWeight(.medium).frame(width: 52, alignment: .trailing)
-                Text("\(Fmt.arrow(pos.basePnl)) \(Fmt.signedMoney(pos.basePnl, currency))")
-                    .foregroundStyle(Palette.delta(pos.basePnl)).frame(width: 62, alignment: .trailing)
-                Text(Fmt.pct(pos.pnlPct)).foregroundStyle(Palette.delta(pos.basePnl)).frame(width: 40, alignment: .trailing)
+            // every column has a fixed width and the sum (≈285pt) stays under the 297pt row even at
+            // the real widget's slightly wider font metrics, so nothing shifts between rows
+            HStack(spacing: 3) {
+                Text(pos.ticker).font(.caption.weight(.semibold)).frame(width: 38, alignment: .leading)
+                if showWeightBar {
+                    WeightBar(weight: pos.weight ?? 0, max: maxWeight).frame(minWidth: 30)
+                    Text(Fmt.pct(pos.weight, signed: false)).foregroundStyle(.tertiary).frame(width: 34, alignment: .trailing)
+                }
+                // average cost → current price in the stock's own currency, as aligned sub-columns
+                HStack(spacing: 2) {
+                    Text(pos.avgPrice.map(Fmt.price) ?? "–").frame(width: 42, alignment: .trailing)
+                    Text("→").foregroundStyle(.tertiary).frame(width: 9)
+                    // cost right-aligned, price left-aligned: the arrow sits centred between them in every row
+                    Text("\(Fmt.price(pos.price))\(Fmt.symbol(pos.currency))").frame(width: 52, alignment: .leading)
+                }
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: showWeightBar ? .trailing : .leading)
+                Text(Fmt.money(pos.baseValue, currency)).fontWeight(.medium).frame(width: 50, alignment: .trailing)
+                Text(Fmt.signedMoney(pos.basePnl, currency))
+                    .foregroundStyle(Palette.delta(pos.basePnl)).frame(width: 50, alignment: .trailing)
+                Text(Fmt.pct(pos.pnlPct)).foregroundStyle(Palette.delta(pos.basePnl)).frame(width: 38, alignment: .trailing)
             }
             .font(.system(size: dense ? 9 : 10))
             .monospacedDigit()
             .lineLimit(1)
-            .minimumScaleFactor(0.85)
+            .minimumScaleFactor(0.8)
         } else {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -160,7 +203,7 @@ struct PositionRow: View {
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(Fmt.money(pos.baseValue, currency)).font(.caption.weight(.medium))
-                    Text("\(Fmt.arrow(pos.pnlPct)) \(Fmt.pct(pos.pnlPct))")
+                    Text(Fmt.pct(pos.pnlPct))
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(Palette.delta(pos.basePnl))
                 }
@@ -213,7 +256,8 @@ struct PortfolioView: View {
                     .frame(height: n <= 4 ? 80 : n <= 7 ? 56 : 28)
                 DateRange(points: p.navChart)
                 returnsRow
-                Caption(title: "Positions", note: "P&L vs. cost")
+                cashRow
+                PositionHeader()
                     .padding(.top, 2)
                 VStack(spacing: n <= 4 ? 12 : n <= 7 ? 9 : 3) {
                     ForEach(p.positions.prefix(10)) { PositionRow(pos: $0, currency: p.currency, maxWeight: maxWeight, detailed: true, dense: dense) }
@@ -232,7 +276,7 @@ struct PortfolioView: View {
                     if let cash = p.cashBalances, !cash.isEmpty {
                         HStack(spacing: 4) {
                             Text("Cash").foregroundStyle(.secondary)
-                            Text(cash.map { Fmt.money($0.cash, $0.currency) }.joined(separator: " + "))
+                            Text(cash.map { Fmt.amount($0.cash, $0.currency) }.joined(separator: " + "))
                         }
                         .font(.caption2.weight(.medium))
                         .monospacedDigit()
@@ -241,8 +285,8 @@ struct PortfolioView: View {
                 }
                 .frame(width: 290)
                 VStack(spacing: n > 10 ? 3 : n > 7 ? 6 : 10) {
-                    Caption(title: "\(n) positions", note: "P&L vs. cost")
-                    ForEach(p.positions.prefix(14)) { PositionRow(pos: $0, currency: p.currency, maxWeight: maxWeight, detailed: true, dense: n > 10) }
+                    PositionHeader(showWeightBar: true)
+                    ForEach(p.positions.prefix(14)) { PositionRow(pos: $0, currency: p.currency, maxWeight: maxWeight, detailed: true, dense: n > 10, showWeightBar: true) }
                     more(after: 14)
                     Spacer(minLength: 0)
                 }
@@ -265,6 +309,23 @@ struct PortfolioView: View {
                 .fixedSize()
             }
         }
+    }
+
+    /// Available cash: total in the base currency, then the balances it is made of.
+    @ViewBuilder
+    private var cashRow: some View {
+        HStack(spacing: 4) {
+            Text("Cash").foregroundStyle(.secondary)
+            Text(Fmt.money(p.cash, p.currency)).fontWeight(.medium)
+            if let cash = p.cashBalances, cash.count > 1 || cash.first?.currency != p.currency {
+                Text("·").foregroundStyle(.tertiary)
+                Text(cash.map { Fmt.amount($0.cash, $0.currency) }.joined(separator: " + ")).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .font(.caption2)
+        .monospacedDigit()
+        .lineLimit(1)
     }
 
     /// "+3 more · 1 240 €" when the list is cut, so the total is never silently incomplete.
