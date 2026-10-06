@@ -1,0 +1,17 @@
+# Xcode / SwiftPM
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+.swiftpm/
+.build/
+
+# macOS
+.DS_Store
+
+# never commit credentials or key material
+*.pem
+ibkr_env_*
+
+# generated from project.yml (embeds the signing team): run xcodegen
+*.xcodeproj/

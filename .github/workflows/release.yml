@@ -1,0 +1,92 @@
+# Builds Folio, signs it with your Developer ID,
+# notarizes it with Apple, staples the ticket and publishes Folio-X.Y.Z.zip as a GitHub release.
+#
+# Store the secrets in a GitHub *environment* named "release" (Settings → Environments), not as plain
+# repository secrets, and require your own review on it: then no branch, PR or stray workflow can read them.
+# Alternatively keep the certificate off GitHub entirely and run scripts/release.sh on your Mac.
+#
+# Required secrets (in the "release" environment):
+#   DEVELOPMENT_TEAM            10-character Apple team ID
+#   DEVELOPER_ID_P12            base64 of a "Developer ID Application" certificate exported as .p12
+#   DEVELOPER_ID_P12_PASSWORD   the .p12 password
+#   NOTARY_KEY_ID               App Store Connect API key ID
+#   NOTARY_ISSUER_ID            App Store Connect API issuer ID
+#   NOTARY_KEY_P8               base64 of the API key .p8 file
+name: Release
+
+# Manual only: the maintainer releases from a Mac with scripts/release.sh. Run this workflow from the
+# Actions tab if you prefer GitHub to build, sign and notarize (needs the secrets below).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 1.0.1 (a tag v<version> is created)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    environment: release
+    env:
+      DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Import Developer ID certificate
+        env:
+          P12_BASE64: ${{ secrets.DEVELOPER_ID_P12 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          rm "$RUNNER_TEMP/cert.p12"
+
+      - name: Version
+        run: echo "VERSION=${{ inputs.version }}" >> "$GITHUB_ENV"
+
+      - name: Build and sign
+        run: |
+          xcodegen generate
+          xcodebuild -project IBKRWidget.xcodeproj -scheme IBKRWidget -configuration Release -derivedDataPath build \
+            CODE_SIGN_IDENTITY="Developer ID Application" OTHER_CODE_SIGN_FLAGS="--timestamp" \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" build
+          codesign --verify --deep --strict --verbose=2 build/Build/Products/Release/Folio.app
+
+      - name: Notarize and staple
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+        run: |
+          echo "$NOTARY_KEY_P8" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          ditto -c -k --keepParent build/Build/Products/Release/Folio.app notarize.zip
+          xcrun notarytool submit notarize.zip --key "$RUNNER_TEMP/AuthKey.p8" \
+            --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait
+          xcrun stapler staple build/Build/Products/Release/Folio.app
+          spctl --assess --type exec --verbose=2 build/Build/Products/Release/Folio.app
+          rm "$RUNNER_TEMP/AuthKey.p8" notarize.zip
+
+      - name: Package
+        run: |
+          ditto -c -k --keepParent build/Build/Products/Release/Folio.app "Folio-$VERSION.zip"
+          shasum -a 256 "Folio-$VERSION.zip" > "Folio-$VERSION.zip.sha256"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" "Folio-$VERSION.zip" "Folio-$VERSION.zip.sha256" \
+            --target "$GITHUB_SHA" --title "Folio $VERSION" --generate-notes
