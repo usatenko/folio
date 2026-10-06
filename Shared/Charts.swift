@@ -59,11 +59,16 @@ struct LineChart: View {
             .chartXAxis(.hidden)
             .chartYAxis {
                 if showAxis {
-                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { _ in
+                    AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
                         AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(Palette.grid)
-                        AxisValueLabel(format: FloatingPointFormatStyle<Double>.number.notation(.compactName))
-                            .font(.system(size: 9))
-                            .foregroundStyle(.primary)
+                        // explicit label content: primary ink, which Charts' default (secondary) cannot override
+                        AxisValueLabel {
+                            if let v = value.as(Double.self) {
+                                Text(v, format: .number.notation(.compactName))
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(Color.primary)
+                            }
+                        }
                     }
                 }
             }

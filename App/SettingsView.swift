@@ -64,6 +64,11 @@ struct SettingsView: View {
                 }
             }
             Section("IBKR OAuth credentials") {
+                HStack {
+                    Button("Connect to IBKR…") { AppDelegate.shared.openConnect() }
+                    Text("Generates the keys and walks you through IBKR's portal.").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                }
                 TextField("Consumer key", text: $creds.consumerKey)
                 TextField("Access token", text: $creds.accessToken)
                 SecureField("Access token secret", text: $creds.accessTokenSecret)
@@ -145,6 +150,10 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 540, height: 640)  // fixed height; the grouped form scrolls
+        .onReceive(NotificationCenter.default.publisher(for: .credentialsChanged)) { _ in
+            creds = Credentials.load() ?? Credentials()
+            saved = Credentials.load()
+        }
         .fileImporter(isPresented: $pickingFolder, allowedContentTypes: [.folder]) { importFolder($0) }
         .fileImporter(isPresented: Binding(get: { pickingKey != nil }, set: { if !$0 { pickingKey = nil } }),
                       allowedContentTypes: [.item]) { importKey($0) }

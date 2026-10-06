@@ -41,6 +41,8 @@ struct MenuContent: View {
 /// Opening the app (Finder, Spotlight, Launchpad) shows Settings, the only window; while it is open
 /// the app behaves like a regular one, with a Dock icon and menu bar.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    static var shared: AppDelegate { NSApp.delegate as! AppDelegate }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // the widget only updates while Folio runs; offer login-item registration once, never silently
         if !UserDefaults.standard.bool(forKey: "loginItemOffered"), SMAppService.mainApp.status == .notRegistered {
@@ -97,6 +99,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    private var connectWindow: NSWindow?
+    private var connectModel: ConnectModel?
+
+    @MainActor func openConnect() {
+        if connectWindow == nil {
+            let model = ConnectModel()
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1040, height: 700),
+                             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+            w.title = "Connect to IBKR"
+            w.contentViewController = NSHostingController(rootView: ConnectView(model: model))
+            w.isReleasedWhenClosed = false
+            w.center()
+            connectWindow = w
+            connectModel = model
+        }
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        connectWindow?.makeKeyAndOrderFront(nil)
+    }
 
     static func openSettings() {
         NSApp.setActivationPolicy(.regular)

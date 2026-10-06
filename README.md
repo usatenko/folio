@@ -45,18 +45,18 @@ Or open the generated project in Xcode and run the `IBKRWidget` scheme. The team
 
 ## Set up IBKR credentials
 
-1. Generate keys on your Mac (keep the private files safe, they are never uploaded):
-   ```bash
-   mkdir -p ~/.ibkr && cd ~/.ibkr
-   openssl genrsa -out signature.pem 2048 && openssl rsa -in signature.pem -pubout -out signature.pub.pem
-   openssl genrsa -out encryption.pem 2048 && openssl rsa -in encryption.pem -pubout -out encryption.pub.pem
-   openssl dhparam -out dhparam.pem 2048
-   ```
-2. Open the [IBKR OAuth self-service portal](https://ndcdyn.interactivebrokers.com/sso/Login?action=OAUTH&RL=1), log in with your live username, choose a consumer key (9 uppercase letters) and upload `signature.pub.pem`, `encryption.pub.pem` and `dhparam.pem`.
-3. Generate an access token; the portal shows the token and its secret once.
-4. In Folio → Settings, paste the consumer key, token and secret, choose the two private `.pem` files and `dhparam.pem`, click **Test connection**, then **Save**. Everything is stored in your login Keychain; the files on disk are no longer needed by the app.
+Folio → Settings → **Connect to IBKR…** opens an assistant that does most of the work:
 
-New consumer keys and tokens can take until IBKR's next overnight reset before they work. The Settings window has the same steps with a copy button for the commands.
+1. **Generate keys**: Folio creates the two RSA key pairs and the Diffie-Hellman parameters (via the system `openssl`, about a minute) and stores the private keys in your Keychain. Nothing is written to disk outside the Keychain.
+2. **Log in** to IBKR's OAuth self-service portal in the embedded browser, with your live username and 2FA.
+3. **Consumer key**: enter the suggested 9-letter key in the portal (Copy button). When you click the portal's three upload buttons, Folio supplies `signature.pub.pem`, `encryption.pub.pem` and `dhparam.pem` itself, in that order.
+4. **Generate the access token** in the portal. Folio captures the token and its secret from the page, saves everything and starts polling.
+
+New consumer keys and tokens can take until IBKR's next overnight reset before they work; the first connection test may fail until then.
+
+**Manual route** (if the embedded browser can't log in, or you prefer Safari): after step 1 click **Save public files…**, upload them from the portal in Safari, then paste the consumer key, token and secret into Settings. The `openssl` commands for doing everything by hand are also shown in Settings, and a folder in the `~/.ibkr` layout (an `ibkr_env_live` file naming the key files) can be imported with **Import from folder…**.
+
+Availability: IBKR describes OAuth 1.0a as aimed at institutional use; retail accounts are normally expected to use the Client Portal Gateway, so the portal may not be offered to every account.
 
 Then right-click the desktop → **Edit Widgets** → **Folio**.
 

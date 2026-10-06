@@ -24,6 +24,7 @@ actor IBKRClient {
     private let signatureKey: SecKey
     private let encryptionKey: SecKey
     private let dhPrime: BigUInt
+    private let dhGenerator: BigUInt
     private var liveSessionToken: Data?
     private var liveSessionExpires = Date.distantPast
     private let session: URLSession = {
@@ -36,7 +37,7 @@ actor IBKRClient {
         self.credentials = credentials
         signatureKey = try RSA.privateKey(pem: credentials.signatureKeyPEM)
         encryptionKey = try RSA.privateKey(pem: credentials.encryptionKeyPEM)
-        dhPrime = try DH.prime(pem: credentials.dhParamsPEM)
+        (dhPrime, dhGenerator) = try DH.params(pem: credentials.dhParamsPEM)
     }
 
     // MARK: endpoints
@@ -76,7 +77,7 @@ actor IBKRClient {
     private func requestLiveSessionToken() async throws {
         let url = Self.baseURL + "oauth/live_session_token"
         let dhRandom = BigUInt(Data((0..<32).map { _ in UInt8.random(in: 0...255) }))
-        let challenge = BigUInt(2).power(dhRandom, modulus: dhPrime)
+        let challenge = dhGenerator.power(dhRandom, modulus: dhPrime)
         guard let secret = Data(base64Encoded: credentials.accessTokenSecret) else {
             throw IBKRError.badResponse("access token secret is not base64")
         }

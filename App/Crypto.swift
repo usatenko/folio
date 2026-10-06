@@ -109,13 +109,16 @@ enum RSA {
 }
 
 enum DH {
-    static func prime(pem: String) throws -> BigUInt {
+    /// Prime and generator from a "DH PARAMETERS" PEM (SEQUENCE { prime INTEGER, generator INTEGER }).
+    static func params(pem: String) throws -> (prime: BigUInt, generator: BigUInt) {
         let (label, der) = try PEM.decode(pem)
         guard label == "DH PARAMETERS" else { throw CryptoError.pem("expected DH PARAMETERS, got \(label)") }
         let parts = try DER.children(of: der)
-        guard let p = parts.first, p.tag == 0x02 else { throw CryptoError.der("no prime in DH parameters") }
-        return BigUInt(Data(p.content))
+        guard parts.count >= 2, parts[0].tag == 0x02, parts[1].tag == 0x02 else { throw CryptoError.der("malformed DH parameters") }
+        return (BigUInt(Data(parts[0].content)), BigUInt(Data(parts[1].content)))
     }
+
+    static func prime(pem: String) throws -> BigUInt { try params(pem: pem).prime }
 
     /// Big-endian bytes with a leading zero when the top bit would otherwise read as a sign bit
     /// (Java BigInteger.toByteArray semantics, which IBKR's HMAC key derivation relies on).

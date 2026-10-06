@@ -22,23 +22,27 @@ struct Credentials: Codable, Equatable {
 
     private static let service = "com.ou.ibkrwidget.oauth"
 
-    private static func query(dataProtection: Bool) -> [CFString: Any] {
-        var q: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: "ibkr"]
+    /// The live item; the Connect assistant keeps a second, pending set until a token is captured.
+    static let liveAccount = "ibkr"
+    static let pendingAccount = "ibkr-pending"
+
+    private static func query(dataProtection: Bool, account: String = liveAccount) -> [CFString: Any] {
+        var q: [CFString: Any] = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account]
         if dataProtection { q[kSecUseDataProtectionKeychain] = true }
         return q
     }
 
-    private static func read(dataProtection: Bool) -> Credentials? {
-        var q = query(dataProtection: dataProtection)
+    private static func read(dataProtection: Bool, account: String = liveAccount) -> Credentials? {
+        var q = query(dataProtection: dataProtection, account: account)
         q[kSecReturnData] = true
         var out: CFTypeRef?
         guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let data = out as? Data else { return nil }
         return try? JSONDecoder().decode(Credentials.self, from: data)
     }
 
-    private func write(dataProtection: Bool) throws {
+    private func write(dataProtection: Bool, account: String = Self.liveAccount) throws {
         let data = try JSONEncoder().encode(self)
-        let q = Self.query(dataProtection: dataProtection)
+        let q = Self.query(dataProtection: dataProtection, account: account)
         var status = SecItemUpdate(q as CFDictionary, [kSecValueData: data] as CFDictionary)
         if status == errSecItemNotFound {
             var add = q
@@ -74,6 +78,21 @@ struct Credentials: Codable, Equatable {
     static func delete() {
         SecItemDelete(query(dataProtection: true) as CFDictionary)
         SecItemDelete(query(dataProtection: false) as CFDictionary)
+    }
+
+    // MARK: pending set (Connect assistant)
+
+    static func loadPending() -> Credentials? {
+        read(dataProtection: true, account: pendingAccount) ?? read(dataProtection: false, account: pendingAccount)
+    }
+
+    func savePending() throws {
+        do { try write(dataProtection: true, account: Self.pendingAccount) } catch { try write(dataProtection: false, account: Self.pendingAccount) }
+    }
+
+    static func deletePending() {
+        SecItemDelete(query(dataProtection: true, account: pendingAccount) as CFDictionary)
+        SecItemDelete(query(dataProtection: false, account: pendingAccount) as CFDictionary)
     }
 
     // MARK: import from an ~/.ibkr-style folder

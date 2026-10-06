@@ -252,11 +252,11 @@ struct PortfolioView: View {
             let dense = n > 7
             VStack(alignment: .leading, spacing: 4) {
                 Header(p: p, now: now, large: true)
+                cashRow
                 LineChart(points: p.navChart, showAxis: true)
                     .frame(height: n <= 4 ? 80 : n <= 7 ? 56 : 28)
                 DateRange(points: p.navChart)
                 returnsRow
-                cashRow
                 PositionHeader()
                     .padding(.top, 2)
                 VStack(spacing: n <= 4 ? 12 : n <= 7 ? 9 : 3) {
@@ -314,12 +314,18 @@ struct PortfolioView: View {
     /// Available cash: total in the base currency, then the balances it is made of.
     @ViewBuilder
     private var cashRow: some View {
-        HStack(spacing: 4) {
-            Text("Cash").foregroundStyle(.secondary)
-            Text(Fmt.money(p.cash, p.currency)).fontWeight(.medium)
+        // each value is its own element with air around it: "Cash 14 009€  ·  8 920$  +  6 087€"
+        HStack(spacing: 10) {
+            HStack(spacing: 4) {
+                Text("Cash").foregroundStyle(.secondary)
+                Text(Fmt.money(p.cash, p.currency)).fontWeight(.medium)
+            }
             if let cash = p.cashBalances, cash.count > 1 || cash.first?.currency != p.currency {
                 Text("·").foregroundStyle(.tertiary)
-                Text(cash.map { Fmt.amount($0.cash, $0.currency) }.joined(separator: " + ")).foregroundStyle(.secondary)
+                ForEach(Array(cash.enumerated()), id: \.element.currency) { i, c in
+                    if i > 0 { Text("+").foregroundStyle(.tertiary) }
+                    Text(Fmt.amount(c.cash, c.currency)).foregroundStyle(.secondary)
+                }
             }
             Spacer()
         }
