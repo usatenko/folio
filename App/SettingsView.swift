@@ -20,6 +20,11 @@ struct SettingsView: View {
     }
 
     private var appName: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String ?? "Folio" }
+    private var version: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return "\(short) (\(build))"
+    }
 
     var body: some View {
         Form {
@@ -50,6 +55,13 @@ struct SettingsView: View {
                 Text("Widget: right-click the desktop → Edit Widgets → \(appName). Closing this window keeps \(appName) running in the background.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                LabeledContent("Version") {
+                    HStack(spacing: 6) {
+                        Text("\(appName) \(version)")
+                        Link("Releases", destination: URL(string: "https://github.com/usatenko/folio/releases")!)
+                            .font(.caption)
+                    }
+                }
             }
             Section("IBKR OAuth credentials") {
                 TextField("Consumer key", text: $creds.consumerKey)
