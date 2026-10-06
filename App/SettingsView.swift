@@ -23,7 +23,7 @@ struct SettingsView: View {
     private var version: String {
         let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
-        return "\(short) (\(build))"
+        return short == "0.0.0" ? "development build" : "\(short) (\(build))"  // 0.0.0 = built from the project, not released
     }
 
     var body: some View {
